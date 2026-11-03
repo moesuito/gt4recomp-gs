@@ -100,6 +100,20 @@ void GSAddSwapChainAcquireWait(u64 microseconds);
 u64 GSGetSwapChainAcquireWaitUs();
 u64 GSGetSwapChainAcquireCount();
 u64 GSGetSwapChainAcquireBlockedCount();
+
+// GT4Recomp fork (gt4-gs.exe, task 145): swap chain rebuild and keep reporting. One stderr line per rebuild with its
+// reason, and a counter for the cases where the swap chain is kept on purpose (the game copies stderr into its log).
+// A rebuild while a flip-model swap chain is on screen can show what is behind the window for a frame, so the
+// renderers keep the swap chain whenever the surface size did not change.
+enum class GSSwapChainKept
+{
+	SuboptimalSameSize, // Vulkan: VK_SUBOPTIMAL_KHR from acquire while the surface size is unchanged
+	ResizeSameSize, // a resize request with the size the swap chain already has
+	PresentStatus, // Direct3D: a Present() result other than S_OK (for example DXGI_STATUS_OCCLUDED)
+	Count
+};
+void GSLogSwapChainRebuild(const char* api, const char* reason, u32 old_width, u32 old_height, u32 new_width, u32 new_height);
+void GSCountSwapChainKept(GSSwapChainKept kind, const char* api, const char* what, u32 width, u32 height);
 std::string GetDefaultAdapter();
 bool GSWantsExclusiveFullscreen();
 std::optional<float> GSGetHostRefreshRate();

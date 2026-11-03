@@ -2287,6 +2287,8 @@ void GSDeviceVK::Destroy()
 
 bool GSDeviceVK::UpdateWindow()
 {
+	const u32 old_width = m_swap_chain ? m_swap_chain->GetWidth() : 0;
+	const u32 old_height = m_swap_chain ? m_swap_chain->GetHeight() : 0;
 	DestroySurface();
 
 	if (!AcquireWindow(false))
@@ -2329,6 +2331,8 @@ bool GSDeviceVK::UpdateWindow()
 	}
 
 	m_window_info = m_swap_chain->GetWindowInfo();
+	GSLogSwapChainRebuild("Vulkan", "window update (attach_window)", old_width, old_height, m_swap_chain->GetWidth(),
+		m_swap_chain->GetHeight());
 	RenderBlankFrame();
 	InvalidateCachedState();
 	SetInitialState(m_current_command_buffer);
@@ -2343,6 +2347,9 @@ void GSDeviceVK::ResizeWindow(u32 new_window_width, u32 new_window_height, float
 							 m_swap_chain->GetHeight() == new_window_height))
 	{
 		// skip unnecessary resizes
+		if (m_swap_chain)
+			GSCountSwapChainKept(GSSwapChainKept::ResizeSameSize, "Vulkan", "resize request with the unchanged size",
+				new_window_width, new_window_height);
 		m_window_info.surface_scale = new_window_scale;
 		return;
 	}
@@ -2350,14 +2357,23 @@ void GSDeviceVK::ResizeWindow(u32 new_window_width, u32 new_window_height, float
 	// make sure previous frames are presented
 	WaitForGPUIdle();
 
+	// A size of 0x0 is BeginPresent() rebuilding at the current surface size, which logs its own reason.
+	const u32 old_width = m_swap_chain->GetWidth();
+	const u32 old_height = m_swap_chain->GetHeight();
+	const bool log_rebuild = (new_window_width != 0 || new_window_height != 0);
+
 	if (!m_swap_chain->ResizeSwapChain(new_window_width, new_window_height, new_window_scale))
 	{
 		// AcquireNextImage() will fail, and we'll recreate the surface.
 		Console.Error("VK: Failed to resize swap chain. Next present will fail.");
+		if (log_rebuild)
+			GSLogSwapChainRebuild("Vulkan", "size change, rebuild failed", old_width, old_height, new_window_width, new_window_height);
 		return;
 	}
 
 	m_window_info = m_swap_chain->GetWindowInfo();
+	if (log_rebuild)
+		GSLogSwapChainRebuild("Vulkan", "size change", old_width, old_height, m_swap_chain->GetWidth(), m_swap_chain->GetHeight());
 }
 
 bool GSDeviceVK::SupportsExclusiveFullscreen() const
@@ -2426,6 +2442,11 @@ void GSDeviceVK::SetVSyncMode(GSVSyncMode mode, bool allow_present_throttle)
 		pxFailRel("Failed to update swap chain present mode.");
 		m_swap_chain.reset();
 	}
+	else
+	{
+		GSLogSwapChainRebuild("Vulkan", "present mode change", m_swap_chain->GetWidth(), m_swap_chain->GetHeight(),
+			m_swap_chain->GetWidth(), m_swap_chain->GetHeight());
+	}
 }
 
 GSDevice::PresentResult GSDeviceVK::BeginPresent(bool frame_skip)
@@ -2454,27 +2475,52 @@ GSDevice::PresentResult GSDeviceVK::BeginPresent(bool frame_skip)
 		vkCmdEndQuery(m_current_command_buffer, m_pipeline_statistics_query_pool, m_current_frame);
 	}
 
+	const bool out_of_date_from_present = m_resize_requested;
 	VkResult res = m_resize_requested ? VK_ERROR_OUT_OF_DATE_KHR : m_swap_chain->AcquireNextImage();
+
+	// GT4Recomp fork (task 145): NVIDIA drivers report VK_SUBOPTIMAL_KHR from time to time in borderless fullscreen
+	// while the surface still has the size of the swap chain. Rebuilding it then (device wait idle, destroy, create)
+	// stalls the GS thread for tens of milliseconds, and while a flip-model swap chain is rebuilt the compositor can
+	// show what is behind the window for a frame. The image that was acquired is valid, so the swap chain is kept;
+	// only VK_ERROR_OUT_OF_DATE_KHR or a surface of another size rebuilds it.
+	if (res == VK_SUBOPTIMAL_KHR && !m_swap_chain->SurfaceSizeChanged())
+	{
+		GSCountSwapChainKept(GSSwapChainKept::SuboptimalSameSize, "Vulkan", "VK_SUBOPTIMAL_KHR from acquire, surface size unchanged",
+			m_swap_chain->GetWidth(), m_swap_chain->GetHeight());
+		res = VK_SUCCESS;
+	}
+
 	if (res != VK_SUCCESS)
 	{
 		m_swap_chain->ReleaseCurrentImage();
 
 		if (res == VK_SUBOPTIMAL_KHR || res == VK_ERROR_OUT_OF_DATE_KHR)
 		{
+			const char* reason = out_of_date_from_present ? "VK_ERROR_OUT_OF_DATE_KHR from present" :
+				(res == VK_ERROR_OUT_OF_DATE_KHR ? "VK_ERROR_OUT_OF_DATE_KHR from acquire" :
+					"VK_SUBOPTIMAL_KHR from acquire, surface size changed");
+			const u32 old_width = m_swap_chain->GetWidth();
+			const u32 old_height = m_swap_chain->GetHeight();
 			ResizeWindow(0, 0, m_window_info.surface_scale);
+			GSLogSwapChainRebuild("Vulkan", reason, old_width, old_height, m_swap_chain->GetWidth(), m_swap_chain->GetHeight());
 			ImGuiManager::WindowResized();
 			res = m_swap_chain->AcquireNextImage();
 		}
 		else if (res == VK_ERROR_SURFACE_LOST_KHR)
 		{
 			Console.Warning("VK: Surface lost, attempting to recreate");
+			const u32 old_width = m_swap_chain->GetWidth();
+			const u32 old_height = m_swap_chain->GetHeight();
 			if (!m_swap_chain->RecreateSurface(m_window_info))
 			{
 				Console.Error("VK: Failed to recreate surface after loss");
+				GSLogSwapChainRebuild("Vulkan", "VK_ERROR_SURFACE_LOST_KHR, surface recreation failed", old_width, old_height, old_width, old_height);
 				ExecuteCommandBuffer(false);
 				return PresentResult::FrameSkipped;
 			}
 
+			GSLogSwapChainRebuild("Vulkan", "VK_ERROR_SURFACE_LOST_KHR, surface recreated", old_width, old_height,
+				m_swap_chain->GetWidth(), m_swap_chain->GetHeight());
 			res = m_swap_chain->AcquireNextImage();
 		}
 		else

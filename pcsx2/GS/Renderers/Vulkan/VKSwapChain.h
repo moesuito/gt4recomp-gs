@@ -73,6 +73,9 @@ public:
 	bool RecreateSurface(const WindowInfo& new_wi);
 	bool ResizeSwapChain(u32 new_width = 0, u32 new_height = 0, float new_scale = 1.0f);
 
+	// GT4Recomp fork (task 145): true when the surface no longer has the size of this swap chain.
+	bool SurfaceSizeChanged() const;
+
 	// Change vsync enabled state. This may fail as it causes a swapchain recreation.
 	bool SetPresentMode(VkPresentModeKHR present_mode);
 

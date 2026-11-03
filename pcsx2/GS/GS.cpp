@@ -52,7 +52,9 @@
 
 #include "fmt/format.h"
 
+#include <array>
 #include <atomic>
+#include <cstdio>
 #include <fstream>
 
 Pcsx2Config::GSOptions GSConfig;
@@ -107,6 +109,29 @@ u64 GSGetSwapChainAcquireCount()
 u64 GSGetSwapChainAcquireBlockedCount()
 {
 	return s_swap_chain_acquire_blocked.load(std::memory_order_relaxed);
+}
+
+// GT4Recomp fork (task 145): see GS.h. Plain stderr lines, as the other gt4-gs.exe messages that the game copies.
+static std::atomic<u64> s_swap_chain_rebuilds{0};
+static std::array<std::atomic<u64>, static_cast<size_t>(GSSwapChainKept::Count)> s_swap_chain_kept{};
+
+void GSLogSwapChainRebuild(const char* api, const char* reason, u32 old_width, u32 old_height, u32 new_width, u32 new_height)
+{
+	const u64 number = s_swap_chain_rebuilds.fetch_add(1, std::memory_order_relaxed) + 1;
+	std::fprintf(stderr, "gt4-gs: swap chain rebuild #%llu (%s): %s, %ux%u -> %ux%u\n", static_cast<unsigned long long>(number),
+		api, reason, old_width, old_height, new_width, new_height);
+	std::fflush(stderr);
+}
+
+void GSCountSwapChainKept(GSSwapChainKept kind, const char* api, const char* what, u32 width, u32 height)
+{
+	// The first few are logged, then every 100th: the NVIDIA suboptimal result can come about once per second.
+	const u64 number = s_swap_chain_kept[static_cast<size_t>(kind)].fetch_add(1, std::memory_order_relaxed) + 1;
+	if (number > 5 && (number % 100) != 0)
+		return;
+	std::fprintf(stderr, "gt4-gs: swap chain kept (%s): %s, %ux%u, count %llu\n", api, what, width, height,
+		static_cast<unsigned long long>(number));
+	std::fflush(stderr);
 }
 
 std::string GetDefaultAdapter()

@@ -769,9 +769,14 @@ void GSDevice11::SetVSyncMode(GSVSyncMode mode, bool allow_present_throttle)
 
 	if (GetSwapChainBufferCount() != old_buffer_count)
 	{
+		// GT4Recomp fork (task 145): every swap chain rebuild is logged with its reason.
+		const u32 old_width = m_window_info.surface_width;
+		const u32 old_height = m_window_info.surface_height;
 		DestroySwapChain();
 		if (!CreateSwapChain())
 			pxFailRel("D3D11: Failed to recreate swap chain after vsync change.");
+		GSLogSwapChainRebuild("D3D11", "buffer count change (vsync mode)", old_width, old_height, m_window_info.surface_width,
+			m_window_info.surface_height);
 	}
 }
 
@@ -970,6 +975,8 @@ void GSDevice11::DestroySwapChain()
 
 bool GSDevice11::UpdateWindow()
 {
+	const u32 old_width = m_window_info.surface_width;
+	const u32 old_height = m_window_info.surface_height;
 	DestroySwapChain();
 
 	if (!AcquireWindow(false))
@@ -981,6 +988,8 @@ bool GSDevice11::UpdateWindow()
 		return false;
 	}
 
+	GSLogSwapChainRebuild("D3D11", "window update (attach_window)", old_width, old_height, m_window_info.surface_width,
+		m_window_info.surface_height);
 	return true;
 }
 
@@ -1043,8 +1052,15 @@ void GSDevice11::ResizeWindow(u32 new_window_width, u32 new_window_height, float
 	m_window_info.surface_scale = new_window_scale;
 
 	if (m_window_info.surface_width == new_window_width && m_window_info.surface_height == new_window_height)
+	{
+		// GT4Recomp fork (task 145): a resize request with the size the swap chain has is counted and ignored.
+		GSCountSwapChainKept(GSSwapChainKept::ResizeSameSize, "D3D11", "resize request with the unchanged size",
+			new_window_width, new_window_height);
 		return;
+	}
 
+	const u32 old_width = m_window_info.surface_width;
+	const u32 old_height = m_window_info.surface_height;
 	m_swap_chain_rtv.reset();
 
 	HRESULT hr = m_swap_chain->ResizeBuffers(
@@ -1054,6 +1070,8 @@ void GSDevice11::ResizeWindow(u32 new_window_width, u32 new_window_height, float
 
 	if (!CreateSwapChainRTV())
 		pxFailRel("Failed to recreate swap chain RTV after resize");
+	GSLogSwapChainRebuild("D3D11", "size change (ResizeBuffers)", old_width, old_height, m_window_info.surface_width,
+		m_window_info.surface_height);
 }
 
 bool GSDevice11::SupportsExclusiveFullscreen() const
@@ -1148,7 +1166,14 @@ void GSDevice11::EndPresent()
 
 	const UINT sync_interval = static_cast<UINT>(m_vsync_mode == GSVSyncMode::FIFO);
 	const UINT flags = (m_vsync_mode == GSVSyncMode::Disabled && m_using_allow_tearing) ? DXGI_PRESENT_ALLOW_TEARING : 0;
-	m_swap_chain->Present(sync_interval, flags);
+	const HRESULT present_result = m_swap_chain->Present(sync_interval, flags);
+	if (present_result != S_OK)
+	{
+		// GT4Recomp fork (task 145): Present() results such as DXGI_STATUS_OCCLUDED never rebuild the swap chain; they are counted.
+		GSCountSwapChainKept(GSSwapChainKept::PresentStatus, "D3D11",
+			fmt::format("Present() returned 0x{:08X}", static_cast<u32>(present_result)).c_str(), m_window_info.surface_width,
+			m_window_info.surface_height);
+	}
 
 	if (m_gpu_timing_enabled)
 		KickTimestampQuery();

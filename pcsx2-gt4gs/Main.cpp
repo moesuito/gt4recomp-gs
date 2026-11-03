@@ -130,9 +130,9 @@ static std::string s_gscap_path;
 static bool s_live_surfaceless = false;
 static u32 s_dump_every = 1; // stream modes: frame dumps only every N vsyncs ([GT4GS] DumpEvery)
 #ifdef GT4GS_NO_JIT
-static constexpr const char* GT4GS_VERSION = "gt4gs 1.2.1 (PCSX2 v2.8.2, no JIT)";
+static constexpr const char* GT4GS_VERSION = "gt4gs 1.2.2-test1 (task 145, PCSX2 v2.8.2, no JIT)";
 #else
-static constexpr const char* GT4GS_VERSION = "gt4gs 1.2.1 (PCSX2 v2.8.2)";
+static constexpr const char* GT4GS_VERSION = "gt4gs 1.2.2-test1 (task 145, PCSX2 v2.8.2)";
 #endif
 // gt4-gs 1.1.0: the GT4 display crop in native PS2 pixels (left, top, right, bottom). GT4's display rectangle ends with
 // one column and one row that are not part of the picture (a line along the right and the bottom edge at every
@@ -1993,8 +1993,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				AttachOnWindowThread(reinterpret_cast<HWND>(wParam), LOWORD(lParam), HIWORD(lParam));
 				return 0;
 			case GT4GS_RESIZE_MSG:
+			{
+				// Task 145: a request for the size the child window already has changes nothing (no WS_CHILD border, so
+				// the client area is the window); skipping it keeps the window and its swap chain untouched.
+				RECT client_rect{};
+				if (GetClientRect(hwnd, &client_rect) && client_rect.right - client_rect.left == static_cast<LONG>(LOWORD(lParam)) &&
+					client_rect.bottom - client_rect.top == static_cast<LONG>(HIWORD(lParam)))
+				{
+					return 0;
+				}
 				SetWindowPos(hwnd, nullptr, 0, 0, LOWORD(lParam), HIWORD(lParam), SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE);
 				return 0;
+			}
 			case GT4GS_CURSOR_MSG:
 				s_cursor_auto_hide = (static_cast<u64>(wParam) & gs_stream::kCursorFlagAutoHide) != 0;
 				s_cursor_delay_ms = static_cast<u32>(std::clamp<LPARAM>(lParam, 1, 60000));

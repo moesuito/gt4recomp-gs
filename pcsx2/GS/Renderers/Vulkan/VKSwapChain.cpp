@@ -618,6 +618,28 @@ bool VKSwapChain::ResizeSwapChain(u32 new_width, u32 new_height, float new_scale
 	return true;
 }
 
+bool VKSwapChain::SurfaceSizeChanged() const
+{
+	// GT4Recomp fork (task 145): does the surface have another size than this swap chain? When that cannot be told,
+	// the answer is yes, which is the old behaviour (rebuild).
+	VkSurfaceCapabilitiesKHR surface_capabilities;
+	const VkResult res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+		GSDeviceVK::GetInstance()->GetPhysicalDevice(), m_surface, &surface_capabilities);
+	if (res != VK_SUCCESS)
+		return true;
+
+	// A current extent of UINT32_MAX means the swap chain decides the surface size, so the surface cannot have changed.
+	if (surface_capabilities.currentExtent.width == std::numeric_limits<u32>::max())
+		return false;
+
+	// The same clamp as in CreateSwapChain(), so a surface that is clamped to the same size counts as unchanged.
+	const u32 width = std::clamp(surface_capabilities.currentExtent.width, surface_capabilities.minImageExtent.width,
+		surface_capabilities.maxImageExtent.width);
+	const u32 height = std::clamp(surface_capabilities.currentExtent.height, surface_capabilities.minImageExtent.height,
+		surface_capabilities.maxImageExtent.height);
+	return std::max(1u, width) != m_window_info.surface_width || std::max(1u, height) != m_window_info.surface_height;
+}
+
 bool VKSwapChain::SetPresentMode(VkPresentModeKHR present_mode)
 {
 	if (m_present_mode == present_mode)
