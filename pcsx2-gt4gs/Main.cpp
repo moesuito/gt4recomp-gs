@@ -702,6 +702,10 @@ namespace
 	};
 	constexpr AllowExtension s_allow_extensions[] = {
 		{"EmuCore/GS", "AspectRatio", "Stretch"},
+		// gt4-gs 1.3.0 (TASK-200): the game repository's settings table narrowed accurate_blending_unit to 3|0 with
+		// TASK-186, but 1.2.x launchers can still write the older values. Keep accepting them so an older launcher is not
+		// affected if it runs this gt4-gs.
+		{"EmuCore/GS", "accurate_blending_unit", "1|2|4|5"},
 	};
 
 	// Keys gt4-gs sets itself and never takes from the config file, even when an allow-list lists them.
