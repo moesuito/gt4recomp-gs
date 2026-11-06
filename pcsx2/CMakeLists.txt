@@ -71,6 +71,8 @@ set(pcsx2Sources
 	Gif_Unit.cpp
 	GS.cpp
 	GSDumpReplayer.cpp
+	GSStreamReplayer.cpp
+	GSStreamOverlay.cpp
 	Host.cpp
 	Hotkeys.cpp
 	Hw.cpp
@@ -156,6 +158,8 @@ set(pcsx2Headers
 	Gif_Unit.h
 	GS.h
 	GSDumpReplayer.h
+	GSStreamReplayer.h
+	GSStreamOverlay.h
 	Hardware.h
 	Host.h
 	Hw.h
@@ -470,7 +474,10 @@ set(pcsx2GSSourcesUnshared
 	GS/Renderers/SW/GSRendererSW.cpp
 )
 
-if(ARCH_X86)
+if(GT4GS_ONLY)
+	# GT4Recomp fork, JIT-free gt4-gs.exe: no GS software JIT (xbyak) code generators; the SW rasterizer uses the
+	# C functions of GSDrawScanline.cpp (GT4GS_NO_JIT).
+elseif(ARCH_X86)
 	list(APPEND pcsx2GSSourcesUnshared
 		GS/Renderers/SW/GSDrawScanlineCodeGenerator.all.cpp
 		GS/Renderers/SW/GSSetupPrimCodeGenerator.all.cpp
@@ -1072,7 +1079,16 @@ set(pcsx2LTOSources
 	${pcsx2GSHeaders}
 )
 
-if(ARCH_X86)
+if(GT4GS_ONLY)
+	# GT4Recomp fork, JIT-free gt4-gs.exe: the EE/IOP recompilers, microVU and the VIF unpack recompilers are not
+	# compiled. GT4GSNoJit.cpp defines the few symbols the interpreters still name; each one stops the process.
+	if(NOT ARCH_X86)
+		message(FATAL_ERROR "GT4GS_ONLY is implemented for x86-64 only")
+	endif()
+	list(APPEND pcsx2LTOSources GT4GSNoJit.cpp)
+	target_compile_definitions(PCSX2_FLAGS INTERFACE GT4GS_NO_JIT=1)
+	target_link_libraries(PCSX2_FLAGS INTERFACE zydis)
+elseif(ARCH_X86)
 	list(APPEND pcsx2LTOSources ${pcsx2x86Sources} ${pcsx2x86Headers})
 	target_link_libraries(PCSX2_FLAGS INTERFACE zydis)
 elseif(ARCH_ARM64)
@@ -1203,11 +1219,30 @@ else()
 endif()
 
 # additonal include directories
-if(ARCH_X86)
+# GT4Recomp fork: a GT4GS_ONLY build has no xbyak include path, so any remaining use of the JIT assembler fails to
+# compile.
+if(ARCH_X86 AND NOT GT4GS_ONLY)
 	target_include_directories(PCSX2_FLAGS INTERFACE "${CMAKE_SOURCE_DIR}/3rdparty/xbyak")
 	target_compile_definitions(PCSX2_FLAGS INTERFACE XBYAK_NO_EXCEPTION)
 endif()
+# GT4Recomp fork: the MIT GS stream protocol header used by GSStreamReplayer, vendored by hash.
+set(GT4GS_STREAM_DIR "${CMAKE_SOURCE_DIR}/3rdparty/gt4recomp-gs-stream")
+file(STRINGS "${GT4GS_STREAM_DIR}/SHA256SUMS" gt4gs_stream_sums)
+foreach(line IN LISTS gt4gs_stream_sums)
+	if(NOT line MATCHES "^([0-9a-f]+) [ *]?(.+)$")
+		message(FATAL_ERROR "gt4recomp-gs-stream: bad SHA256SUMS line '${line}'")
+	endif()
+	set(expected "${CMAKE_MATCH_1}")
+	set(vendored "${CMAKE_MATCH_2}")
+	file(SHA256 "${GT4GS_STREAM_DIR}/${vendored}" actual)
+	if(NOT actual STREQUAL expected)
+		message(FATAL_ERROR "gt4recomp-gs-stream: ${vendored} has SHA-256 ${actual}, SHA256SUMS expects ${expected}")
+	endif()
+endforeach()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GT4GS_STREAM_DIR}/SHA256SUMS")
+
 target_include_directories(PCSX2_FLAGS INTERFACE
+	"${GT4GS_STREAM_DIR}"
 	"${CMAKE_CURRENT_SOURCE_DIR}"
 	"${CMAKE_BINARY_DIR}/pcsx2"
 	"${CMAKE_BINARY_DIR}/common/include"

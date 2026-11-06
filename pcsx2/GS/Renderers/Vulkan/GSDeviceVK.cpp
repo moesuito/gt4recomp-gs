@@ -445,6 +445,10 @@ bool GSDeviceVK::SelectDeviceExtensions(ExtensionList* extension_list, bool enab
 #endif
 
 	m_optional_extensions.vk_ext_fragment_shader_interlock = SupportsExtension(VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME, false);
+	// GT4Recomp fork (task 061): tells a pipeline taken from the pipeline cache apart from a real compile.
+	m_optional_extensions.vk_ext_pipeline_creation_feedback =
+		SupportsExtension(VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME, false);
+	Vulkan::SetPipelineCreationFeedback(m_optional_extensions.vk_ext_pipeline_creation_feedback);
 
 	return true;
 }
@@ -853,6 +857,8 @@ bool GSDeviceVK::ProcessDeviceExtensions()
 		m_optional_extensions.vk_ext_attachment_feedback_loop_layout ? "supported" : "NOT supported");
 	Console.WriteLn("VK_EXT_fragment_shader_interlock is %s",
 		m_optional_extensions.vk_ext_fragment_shader_interlock ? "supported" : "NOT supported");
+	Console.WriteLn("VK_EXT_pipeline_creation_feedback is %s",
+		m_optional_extensions.vk_ext_pipeline_creation_feedback ? "supported" : "NOT supported");
 
 	return true;
 }
@@ -1351,7 +1357,10 @@ void GSDeviceVK::SubmitCommandBuffer(VKSwapChain* present_swap_chain)
 		// Grab the next image as soon as possible, that way we spend less time blocked on the next
 		// submission. Don't care if it fails, we'll deal with that at the presentation call site.
 		// Credit to dxvk for the idea.
-		present_swap_chain->AcquireNextImage();
+		// GT4Recomp fork (task 037): gt4-gs.exe can defer this to BeginPresent of the next frame, so the GS thread is
+		// not blocked until the next display refresh while the following frame's work (and readbacks) wait behind it.
+		if (!GSGetDeferredSwapChainAcquire())
+			present_swap_chain->AcquireNextImage();
 	}
 }
 

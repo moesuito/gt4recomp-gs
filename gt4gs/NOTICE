@@ -25,6 +25,68 @@ Our changes
   dependency script build-dependencies-gt4gs.bat (upstream's build-dependencies.bat without the Qt
   block; Qt is not needed when ENABLE_QT_UI=OFF).
 - 2026-10-15: upstream workflows changed to workflow_dispatch only (no upstream file deleted).
+- 2026-10-16 (branch gt4gs/live, task 036): new files pcsx2/GSStreamReplayer.{h,cpp} (GS stream CPU
+  provider), pcsx2-gt4gs/ (gt4-gs.exe frontend, derived from pcsx2-gsrunner/Main.cpp, and the no-throw
+  StreamTransport adapter), 3rdparty/gt4recomp-gs-stream/ (MIT protocol files from GT4Recomp, vendored by
+  hash). Modified: pcsx2/VMManager.cpp (boot a prepared GS stream without BIOS or disc; select its CPU
+  provider), pcsx2/GSDumpReplayer.cpp (a stream counts as a dump replay; serial from the stream; no dump
+  overlay), common/Console.cpp (console text is also written to redirected standard handles),
+  pcsx2/CMakeLists.txt, CMakeLists.txt and cmake/BuildParameters.cmake (sources, hash check, ENABLE_GT4GS),
+  the dependency script (vswhere -products *), the packaging script and the gt4gs-windows workflow (build
+  pcsx2-gt4gs).
+- 2026-10-16 (branch gt4gs/window, tasks 037 and 038, release 0.3.0): pcsx2/GSStreamReplayer.cpp (GIF
+  tag scanner that captures BITBLTBUF/TRXPOS/TRXREG for unsynchronized readbacks, readback timing,
+  zero-size resize requests ignored, a counter of GIF records that start inside another path's packet),
+  pcsx2-gt4gs/ (data root and [Folders] from the config instead of the PCSX2 user folder, SPU2 Null
+  backend, [GT4GS] SpinUs, DeferSwapChainAcquire and test-only window stall options, input queues
+  detached from the game's window thread, a click on the picture brings the game window forward).
+  Modified PCSX2 files: pcsx2/GS/GS.h and pcsx2/GS/GS.cpp (swap chain acquire accounting and the deferred
+  acquire switch), pcsx2/GS/Renderers/Vulkan/VKSwapChain.cpp (acquire timing),
+  pcsx2/GS/Renderers/Vulkan/GSDeviceVK.cpp (the acquire after present is skipped when deferred).
+- 2026-10-16 (release 0.3.1): pcsx2-gt4gs/Main.cpp: a click on the picture no longer leaves the game window
+  inactive (the GS window thread gives the foreground back to the game window; no HTTRANSPARENT).
+- 2026-10-16: gt4gs/release-local.ps1 (local build, package, source archive and publication of a release);
+  .github/workflows/gt4gs-windows.yml is manual only (no tag trigger).
+- 2026-10-16 (branch gt4gs/deinterlace, task 047, release 0.3.2): pcsx2/GSStreamReplayer.cpp presents each
+  frame with its own VSYNC record's field (GS stream protocol 1.1: the display field) instead of the previous
+  record's field; 3rdparty/gt4recomp-gs-stream/gs_stream_protocol.h updated to protocol 1.1 (MIT, by hash);
+  pcsx2-gt4gs/Main.cpp version string.
+- 2026-10-22 (branch gt4gs/textures-root-1.2.1, release 1.2.1): pcsx2/GS/Renderers/HW/GSTextureReplacements.cpp (the
+  replacement search root is `[Folders] Textures` itself, recursive; the serial-folder and case-mismatch checks removed;
+  `GetDumpFilename` and `DumpTexture` never create or write a dump folder while `kTextureDumpingAllowed` is false),
+  pcsx2-gt4gs/Main.cpp (version string 1.2.1).
+- 2026-10-21 (branch gt4gs/textures-1.2.0, release 1.2.0): pcsx2/GS/Renderers/HW/GSTextureReplacements.cpp (the
+  replacement folder is `[Folders] Textures` itself, with no game-serial subfolder), pcsx2/GS/Renderers/HW/
+  GSTextureReplacements.h (`kTextureDumpingAllowed` = false) and pcsx2/GS/Renderers/HW/GSTextureCache.cpp (texture
+  dumping compiled out of the lookup: texture loading only). pcsx2-gt4gs/Main.cpp: the GT4 display crop bottom is 2
+  rows, the Dump* keys are refused and forced off, the window background is black (WM_ERASEBKGND and the class brush),
+  version string 1.2.0.
+- 2026-10-16 (branch gt4gs/nojit, task 042, release 0.4.0): CMake option GT4GS_ONLY (JIT-free core, macro
+  GT4GS_NO_JIT): cmake/BuildParameters.cmake, CMakeLists.txt, common/CMakeLists.txt and pcsx2/CMakeLists.txt
+  (recompilers, x86 emitter, GS software JIT generators and the xbyak include path left out); new file
+  pcsx2/GT4GSNoJit.cpp; modified pcsx2/Config.h, pcsx2/R5900OpcodeTables.cpp, pcsx2/VMManager.cpp (interpreters
+  only, no VIF unpack recompiler), pcsx2/Vif_Dynarec.h, pcsx2/Vif_Unpack.cpp and pcsx2/MTVU.cpp (VIF recompiler
+  selection at compile time), pcsx2/Memory.cpp (no code area), common/Windows/WinHostSys.cpp (executable
+  protections refused), pcsx2/GS/Renderers/SW/GSDrawScanline.{h,cpp} and
+  pcsx2/GS/Renderers/Common/GSFunctionMap.{h,cpp} (C rasterizer only), pcsx2-gt4gs/Main.cpp (Arbitrary Code
+  Guard, executable memory audit, recompiler settings off, version 0.4.0); gt4gs/check-nojit.ps1;
+  release-local.ps1 and the workflow build with GT4GS_ONLY=ON.
+- 2026-10-16 (branch gt4gs/osd, tasks 060, 061 and 062, release 1.0.0, the first stable release): new files
+  pcsx2/GSStreamOverlay.{h,cpp} ("Compiling shaders" notice and performance overlay drawn with the ImGui OSD;
+  CPU and GPU usage sampler); modified pcsx2/ImGui/ImGuiOverlays.cpp (calls GSStreamOverlay::Draw),
+  pcsx2/GS/GSShaderCompileIndicator.h (counts real compiles apart from pipeline cache hits),
+  pcsx2/GS/Renderers/Vulkan/VKBuilders.{h,cpp} and pcsx2/GS/Renderers/Vulkan/GSDeviceVK.{h,cpp}
+  (VK_EXT_pipeline_creation_feedback when the device has it), pcsx2/GSStreamReplayer.{h,cpp} (GS stream protocol 1.2:
+  CONTROL cursor, OSD_STATS record, READY OSD flag), pcsx2/CMakeLists.txt, pcsx2-gt4gs/Main.cpp (settings
+  allow-list: unknown keys and values are ignored with a warning; cursor auto-hide on the window thread; overlay
+  settings; version 1.0.0) and pcsx2-gt4gs/CMakeLists.txt (allow-list table generated at configure time);
+  3rdparty/gt4recomp-gs-stream updated to protocol 1.2 plus gs-settings-allowlist.json (MIT, by hash).
+- 2026-10-21 (branch gt4gs/aspect-crop, release 1.1.0): pcsx2-gt4gs/Main.cpp (fixed GT4 display crop right 1 and
+  bottom 1 in stream modes, the Crop* keys refused from the settings file; AspectRatio "Stretch" accepted on top of the
+  vendored allow-list; --surface-size for offline replay tests; version 1.1.0), pcsx2/GSStreamReplayer.{h,cpp}
+  (GS stream protocol 1.3: CONTROL display_aspect, READY version_minor 3),
+  pcsx2/GS/Renderers/Common/GSRenderer.cpp (Stretch fills the window exactly when a crop is set); new test tools
+  gt4gs/tests/gscap_inject_control.py and gt4gs/tests/test_display_aspect.py.
 - Later changes will be listed here with dates, in the same form.
 
 GPLv3 section 5
@@ -38,6 +100,12 @@ The corresponding source is the git tag of each release (gt4gs-v*) at
 https://github.com/moesuito/gt4recomp-gs. Each GitHub Release attaches a source archive of that tag
 (GPLv3 section 6(d)). SOURCE.txt in the zip names the exact commit.
 
+GT4Recomp GS stream protocol (MIT)
+----------------------------------
+3rdparty/gt4recomp-gs-stream/ holds files from https://github.com/moesuito/gt4-staticrecomp
+(native/gs_stream/, commit 57d1fa5) under the MIT license (3rdparty/gt4recomp-gs-stream/LICENSE.MIT).
+pcsx2-gt4gs/StreamTransport.{h,cpp} are MIT as well. MIT code is compatible with GPL-3.0-or-later.
+
 Bundled third-party components
 ------------------------------
 The package contains the DLLs that the build links at runtime, copied from the dependency build
@@ -48,7 +116,8 @@ upstream projects, pinned versions in the script) are:
 - shaderc (2026.2), glslang, SPIRV-Headers, SPIRV-Tools: Apache-2.0 (with the LLVM exception where
   applicable) and the upstream licenses of those projects
 - FFmpeg (8.1): the build uses --enable-gpl (for libx264) and libsvtav1, so the FFmpeg DLLs are
-  under GPL-2.0-or-later as a whole. This is compatible with GPL-3.0-or-later distribution.
+  under GPL-2.0-or-later as a whole. This is compatible with GPL-3.0-or-later distribution. Local
+  releases (0.3.1 and later) are built without FFmpeg and ship no FFmpeg, x264, SVT-AV1 or Opus DLLs.
 - x264 (static, in FFmpeg): GPL-2.0-or-later
 - SVT-AV1 (4.0.1): BSD-3-Clause-Clear plus the AOMedia patent license
 - Opus (1.6.1): BSD-3-Clause
