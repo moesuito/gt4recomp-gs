@@ -94,8 +94,9 @@ not import them; PCSX2 loads FFmpeg only for video capture).
 
 ## Renderers in this build
 
-- Vulkan, D3D11 and D3D12 are compiled in on Windows. OpenGL is compiled in too (`USE_OPENGL` default ON)
-  and is not offered by the GT4Recomp launcher.
+- Vulkan, D3D11 and D3D12 are compiled in on Windows. OpenGL is compiled in too (`USE_OPENGL` default ON). Since
+  gt4-gs 1.3.0 (TASK-200) the launcher offers it as `[EmuCore/GS] Renderer = 12`, after Direct3D 11 for older PCs;
+  the allow-list accepts it, and Automatic never picks it.
 - Since 0.4.0 (`GT4GS_ONLY=ON`) there is no recompiler and no software JIT. The software rasterizer (the software
   renderer and the HW renderer's CPU sprite and CPU CLUT render) runs the C functions of `GSDrawScanline.cpp`.
 

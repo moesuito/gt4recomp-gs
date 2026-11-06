@@ -42,6 +42,11 @@ decision 0070 of the GT4Recomp repository (https://github.com/moesuito/gt4-stati
   bottom 1 native pixels, not a setting), the "Stretch" aspect ratio accepted from the settings file, and GS stream
   protocol 1.3: CONTROL kind 7 `display_aspect` (section "Protocol 1.3" below). READY says `version_minor` 3; a 1.2 game
   works unchanged.
+- Branch `gt4gs/fractional-scales-opengl` (TASK-200): **gt4-gs 1.3.0** (not tagged or published; waits for the owner's
+  test). The allow-list accepts the fractional render scales 1.25x, 1.5x, 1.75x and 2.5x in
+  `[EmuCore/GS] upscale_multiplier` (the GS core already handled a fractional multiplier; the Qt/ImGui lists had
+  dropped them, and this fork has neither) and OpenGL as `[EmuCore/GS] Renderer = 12`. OpenGL was already compiled
+  in (`USE_OPENGL`), so no renderer code changed. Nothing else changes: same JIT-free build and protocol 1.3.
 - Branch `gt4gs/textures-root-1.2.1`: **gt4-gs 1.2.1** (not tagged or published; waits for the owner's test). The texture
   folder is the search root itself: replacements are read from `[Folders] Textures` recursively, at any depth (see
   "Texture replacements" below). Nothing gt4-gs writes lands in that folder.
